@@ -1,0 +1,9 @@
+.venv/
+.venv311/
+.venv_clean/
+.venv_new/
+__pycache__/
+*.pyc
+.idea/
+.DS_Store
+main_backup.py
