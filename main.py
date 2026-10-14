@@ -495,7 +495,7 @@ if st.button("인공신경망 구조 비교 실험 실행"):
         ax.set_ylim(axis_min, axis_max)
         ax.set_aspect("equal", adjustable="box")
 
-        ax.set_title(name)
+        ax.set_title(f"{len(structures[name])} Hidden Layers ({', '.join(map(str, structures[name]))})")
         ax.set_xlabel("Actual House Value")
         ax.set_ylabel("Predicted House Value")
         ax.legend()
