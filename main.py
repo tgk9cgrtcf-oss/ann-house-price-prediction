@@ -341,24 +341,35 @@ st.write(
     "줄어들고 있다는 의미입니다."
 )
 st.divider()
+st.divider()
 st.header("10. 인공신경망 구조별 성능 비교 실험")
 
 st.write(
-    "은닉층의 뉴런 수와 구조를 변경하면서 "
-    "인공신경망의 예측 성능이 어떻게 달라지는지 비교합니다."
+    "은닉층의 개수와 뉴런 수를 변경한 4가지 인공신경망 모델을 "
+    "동일한 학습 및 테스트 데이터로 비교합니다."
+)
+
+st.write(
+    "각 모델의 R², RMSE, MAE를 평가하고, "
+    "실제값과 예측값의 관계를 동일한 축 범위의 산점도로 나타냅니다."
 )
 
 if st.button("인공신경망 구조 비교 실험 실행"):
+
     structures = {
         "은닉층 1개 (16)": (16,),
         "은닉층 2개 (32, 16)": (32, 16),
-        "은닉층 2개 (64, 32)": (64, 32)
+        "은닉층 2개 (64, 32)": (64, 32),
+        "은닉층 3개 (64, 32, 16)": (64, 32, 16)
     }
 
     experiment_results = []
+    experiment_predictions = {}
 
-    with st.spinner("인공신경망 구조별 실험을 진행하고 있습니다..."):
+    with st.spinner("4가지 인공신경망 모델을 학습하고 있습니다..."):
+
         for name, structure in structures.items():
+
             experiment_model = MLPRegressor(
                 hidden_layer_sizes=structure,
                 activation="relu",
@@ -369,45 +380,182 @@ if st.button("인공신경망 구조 비교 실험 실행"):
             )
 
             experiment_model.fit(X_train_scaled, y_train)
+
             experiment_pred = experiment_model.predict(X_test_scaled)
+
+            experiment_predictions[name] = experiment_pred
 
             experiment_results.append({
                 "인공신경망 구조": name,
                 "R²": r2_score(y_test, experiment_pred),
-                "RMSE": mean_squared_error(
-                    y_test, experiment_pred
-                ) ** 0.5,
+                "RMSE": np.sqrt(
+                    mean_squared_error(y_test, experiment_pred)
+                ),
                 "MAE": mean_absolute_error(y_test, experiment_pred)
             })
 
     results_df = pd.DataFrame(experiment_results)
 
-    st.text(results_df.round(4).to_string(index=False))
+    st.subheader("10.1 인공신경망 구조별 성능 비교")
 
-    fig_compare, ax_compare = plt.subplots(figsize=(10, 5))
-    ax_compare.bar(
-        ["1 Layer (16)", "2 Layers (32, 16)", "2 Layers (64, 32)"],
-        results_df["R²"]
+    st.dataframe(
+        results_df.round(4),
+        hide_index=True,
+        use_container_width=True
     )
+
+    st.write(
+        "R²가 높을수록 예측 성능이 좋으며, "
+        "RMSE와 MAE는 낮을수록 예측 오차가 작습니다."
+    )
+
+    st.subheader("10.2 인공신경망 구조별 R² 비교")
+
+    fig_compare, ax_compare = plt.subplots(figsize=(11, 5))
+
+    labels = [
+        "1 Layer (16)",
+        "2 Layers (32, 16)",
+        "2 Layers (64, 32)",
+        "3 Layers (64, 32, 16)"
+    ]
+
+    scores = results_df["R²"].to_numpy()
+
+    bars = ax_compare.bar(labels, scores)
+
     ax_compare.set_xlabel("ANN Structure")
     ax_compare.set_ylabel("R² Score")
     ax_compare.set_title("ANN Structure Performance Comparison")
     ax_compare.set_ylim(0, 1)
+    ax_compare.grid(axis="y", alpha=0.2)
+
+    for bar, score in zip(bars, scores):
+        ax_compare.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 0.02,
+            f"{score:.4f}",
+            ha="center"
+        )
+
     plt.xticks(rotation=15)
     plt.tight_layout()
 
     st.pyplot(fig_compare)
     plt.close(fig_compare)
 
-    best_model = results_df.loc[results_df["R²"].idxmax()]
+    st.subheader("10.3 실제값과 예측값 산점도 비교")
+
+    st.write(
+        "모든 산점도에 동일한 X축과 Y축 범위를 적용하여 "
+        "인공신경망 구조에 따른 예측 결과를 비교합니다."
+    )
+
+    actual_values = y_test.to_numpy()
+
+    all_values = [actual_values]
+    all_values.extend(experiment_predictions.values())
+
+    axis_min = min(values.min() for values in all_values)
+    axis_max = max(values.max() for values in all_values)
+
+    margin = (axis_max - axis_min) * 0.05
+
+    axis_min -= margin
+    axis_max += margin
+
+    fig_scatter, axes = plt.subplots(
+        2, 2,
+        figsize=(13, 11),
+        sharex=True,
+        sharey=True
+    )
+
+    for ax, (name, predicted) in zip(
+        axes.flat,
+        experiment_predictions.items()
+    ):
+
+        ax.scatter(
+            actual_values,
+            predicted,
+            alpha=0.3,
+            s=12
+        )
+
+        ax.plot(
+            [axis_min, axis_max],
+            [axis_min, axis_max],
+            color="red",
+            linestyle="--",
+            label="Perfect Prediction"
+        )
+
+        ax.set_xlim(axis_min, axis_max)
+        ax.set_ylim(axis_min, axis_max)
+        ax.set_aspect("equal", adjustable="box")
+
+        ax.set_title(name)
+        ax.set_xlabel("Actual House Value")
+        ax.set_ylabel("Predicted House Value")
+        ax.legend()
+        ax.grid(alpha=0.2)
+
+    plt.tight_layout()
+
+    st.pyplot(fig_scatter)
+    plt.close(fig_scatter)
+
+    st.write(
+        "빨간 점선은 실제값과 예측값이 완전히 일치하는 기준선입니다. "
+        "점들이 기준선에 가까울수록 예측 오차가 작습니다."
+    )
+
+    st.write(
+        "모든 그래프의 축 범위를 동일하게 설정했으므로 "
+        "모델별 예측값의 분포와 오차를 같은 기준으로 비교할 수 있습니다."
+    )
+
+    st.subheader("10.4 실험 결과 분석")
+
+    best_model = results_df.loc[
+        results_df["R²"].idxmax()
+    ]
+
+    worst_model = results_df.loc[
+        results_df["R²"].idxmin()
+    ]
 
     st.success(
-        f"이번 실험에서 가장 높은 R²를 기록한 구조는 "
+        f"가장 높은 R²를 기록한 모델은 "
         f"{best_model['인공신경망 구조']}입니다. "
         f"R² = {best_model['R²']:.4f}"
     )
 
     st.write(
-        "은닉층의 구조가 복잡하다고 반드시 성능이 좋아지는 것은 아닙니다. "
-        "모델의 구조와 데이터의 특성에 따라 예측 성능이 달라질 수 있습니다."
+        f"가장 낮은 R²를 기록한 모델은 "
+        f"{worst_model['인공신경망 구조']}이며, "
+        f"R² = {worst_model['R²']:.4f}입니다."
     )
+
+    st.write(
+        f"두 모델의 R² 차이는 "
+        f"{best_model['R²'] - worst_model['R²']:.4f}입니다."
+    )
+
+    st.write(
+        "이번 실험에서는 은닉층 개수와 뉴런 수가 서로 다른 "
+        "모델들을 비교했습니다."
+    )
+
+    st.write(
+        "따라서 나타난 성능 차이가 은닉층 개수 때문인지 "
+        "뉴런 수 때문인지는 이 실험만으로 구분하기 어렵습니다."
+    )
+
+    st.write(
+        "또한 은닉층이 많다고 반드시 예측 성능이 좋아지는 것은 아닙니다. "
+        "실험 결과를 통해 모델의 복잡성과 예측 성능 사이의 "
+        "관계를 확인할 수 있습니다."
+    )
+    
